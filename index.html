@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="ko" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEADBOX // ARCADE — Deadlock Custom Use-Map Vault</title>
+    <meta name="description" content="데드락(Deadlock) 스크립트 및 물리 메커니즘 개조 유즈맵 아카이브 - Super Smash Rems, Bikachu VolleyBall, Rage Marathon">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Cinzel (Occult Noir Display), Rajdhani (Arcade HUD), JetBrains Mono (Code/Tags), Noto Sans KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        noir: {
+                            950: '#090b10',
+                            900: '#0f131c',
+                            850: '#151b26',
+                            800: '#1c2433',
+                        },
+                        soul: {
+                            400: '#4ef2d2',
+                            500: '#1cd4b4',
+                            600: '#0ea389',
+                            glow: 'rgba(78, 242, 210, 0.25)',
+                        },
+                        brass: {
+                            300: '#f3d59b',
+                            400: '#d4af6a',
+                            500: '#b38b45',
+                            600: '#826128',
+                        },
+                        occult: {
+                            red: '#e84a3c',
+                            amber: '#f59e0b',
+                        },
+                        parchment: '#ede6d6',
+                    },
+                    fontFamily: {
+                        display: ['Cinzel', 'Noto Sans KR', 'serif'],
+                        hud: ['Rajdhani', 'Noto Sans KR', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['Noto Sans KR', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* 커스텀 스크롤바 & 기본 스타일 */
+        body {
+            background-color: #090b10;
+            color: #ede6d6;
+            font-family: 'Noto Sans KR', sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* 미세한 레트로 CRT 스캔라인 오버레이 */
+        .crt-overlay {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.22) 50%
+            ), linear-gradient(
+                90deg,
+                rgba(255, 0, 0, 0.02),
+                rgba(0, 255, 0, 0.01),
+                rgba(0, 0, 255, 0.02)
+            );
+            background-size: 100% 3px, 6px 100%;
+            pointer-events: none;
+        }
+
+        /* 1920년대 오컬트 아르데코 프레임 보더 */
+        .deco-card {
+            background: linear-gradient(165deg, rgba(21, 27, 38, 0.92) 0%, rgba(11, 14, 21, 0.96) 100%);
+            border: 1px solid rgba(212, 175, 106, 0.28);
+            box-shadow: 0 10px 35px -10px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(237, 230, 214, 0.08);
+            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.28s ease, box-shadow 0.28s ease;
+        }
+
+        .deco-card:hover {
+            transform: translateY(-6px);
+            border-color: rgba(78, 242, 210, 0.65);
+            box-shadow: 0 18px 40px -12px rgba(78, 242, 210, 0.18), 0 0 20px rgba(78, 242, 210, 0.08);
+        }
+
+        /* 영혼 불꽃 텍스트 글로우 */
+        .soul-text-glow {
+            text-shadow: 0 0 24px rgba(78, 242, 210, 0.45);
+        }
+
+        .brass-text-glow {
+            text-shadow: 0 0 20px rgba(212, 175, 106, 0.35);
+        }
+
+        /* 아케이드 코인 점멸 애니메이션 */
+        @keyframes pulseCoin {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.45; transform: scale(0.97); }
+        }
+        .animate-coin {
+            animation: pulseCoin 2.2s infinite ease-in-out;
+        }
+
+        /* 배경 오컬트 그리드 패턴 */
+        .occult-grid {
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(78, 242, 210, 0.12) 0%, transparent 55%),
+                radial-gradient(circle at 85% 30%, rgba(212, 175, 106, 0.08) 0%, transparent 45%),
+                linear-gradient(to right, rgba(212, 175, 106, 0.04) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(212, 175, 106, 0.04) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+        }
+
+        /* 커스텀 배구공 바운스 애니메이션 */
+        @keyframes volleyBounce {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(36px, -22px); }
+            50% { transform: translate(74px, 4px); }
+            75% { transform: translate(36px, -26px); }
+        }
+        .animate-volley {
+            animation: volleyBounce 3.2s infinite ease-in-out;
+        }
+
+        /* 혈압 게이지 흔들림 */
+        @keyframes rageShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+        .animate-rage {
+            animation: rageShake 0.35s infinite;
+        }
+    </style>
+</head>
+<body class="occult-grid min-h-screen flex flex-col selection:bg-soul-500 selection:text-noir-950">
+
+    <!-- 미세한 CRT 스캔라인 효과 레이어 -->
+    <div class="crt-overlay fixed inset-0 z-50"></div>
+
+    <!-- 상단 네비게이션 바 -->
+    <header class="sticky top-0 z-40 backdrop-blur-md bg-noir-950/85 border-b border-brass-500/25">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- 브랜드 로고 -->
+            <a href="#" class="flex items-center gap-3 group">
+                <div class="w-9 h-9 rounded-lg bg-noir-850 border border-brass-400/60 flex items-center justify-center shadow-[0_0_15px_rgba(78,242,210,0.2)] group-hover:border-soul-400 transition-colors">
+                    <!-- 영혼 아케이드 조이스틱 SVG 아이콘 -->
+                    <svg class="w-5 h-5 text-soul-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="7" r="4" fill="rgba(78, 242, 210, 0.2)"/>
+                        <path d="M12 11v6" stroke-linecap="round"/>
+                        <rect x="5" y="17" width="14" height="4" rx="1.5" class="text-brass-400" stroke="currentColor"/>
+                        <path d="M8 17v-1.5" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="flex flex-col">
+                    <span class="font-display font-bold tracking-wider text-base sm:text-lg text-parchment leading-none">
+                        DEADBOX <span class="text-soul-400">//</span> ARCADE
+                    </span>
+                    <span class="font-mono text-[10px] tracking-widest text-brass-400/80 uppercase mt-0.5">
+                        Cursed Apple Custom Vault
+                    </span>
+                </div>
+            </a>
+
+            <!-- 데스크톱 메뉴 & 우측 액션 -->
+            <div class="flex items-center gap-2 sm:gap-5">
+                <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-parchment/80">
+                    <a href="#modes" class="hover:text-soul-400 transition-colors" data-i18n="nav_modes">유즈맵 목록</a>
+                    <a href="#setup" class="hover:text-soul-400 transition-colors" data-i18n="nav_setup">실행 가이드</a>
+                    <a href="#about" class="hover:text-soul-400 transition-colors" data-i18n="nav_about">프로젝트 소개</a>
+                </nav>
+
+                <!-- 언어 전환 스위치 (KO / EN) -->
+                <button id="langToggle" onclick="toggleLanguage()" class="px-2.5 py-1.5 rounded-md bg-noir-850 border border-brass-500/35 hover:border-soul-400/60 font-mono text-xs font-semibold text-brass-300 flex items-center gap-1.5 transition-all cursor-pointer" title="Switch Language">
+                    <span id="langBadge" class="w-2 h-2 rounded-full bg-soul-400"></span>
+                    <span id="langLabel">KO / EN</span>
+                </button>
+
+                <!-- GitHub 레포지토리 링크 버튼 -->
+                <a href="https://github.com/ParkSer99/deadbox-arcade" target="_blank" rel="noopener noreferrer"
+                   class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-brass-500/15 hover:bg-brass-500/25 border border-brass-400/50 text-brass-300 hover:text-white font-mono text-xs sm:text-sm font-semibold transition-all shadow-sm">
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                    </svg>
+                    <span class="hidden sm:inline">GitHub</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 히어로 섹션 -->
+    <main class="flex-grow">
+        <section class="relative pt-14 pb-20 sm:pt-20 sm:pb-28 px-4 sm:px-6 lg:px-8 border-b border-brass-500/20 overflow-hidden">
+            <!-- 배경 장식 원형 오컬트 룬 -->
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] rounded-full border border-soul-400/10 pointer-events-none"></div>
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border border-dashed border-brass-400/15 pointer-events-none"></div>
+
+            <div class="max-w-5xl mx-auto text-center relative z-10">
+                <!-- 상단 배지 -->
+                <div class="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-noir-850/90 border border-soul-400/40 mb-6 shadow-[0_0_20px_rgba(78,242,210,0.15)]">
+                    <span class="w-2 h-2 rounded-full bg-soul-400 animate-ping"></span>
+                    <span class="font-mono text-xs sm:text-sm tracking-wider text-soul-400 font-semibold">
+                        MODLOCK POWERED • CUSTOM ARCADE COLLECTION
+                    </span>
+                </div>
+
+                <!-- 메인 타이틀 -->
+                <h1 class="font-display text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-parchment mb-4 brass-text-glow">
+                    DEADBOX <span class="text-transparent bg-clip-text bg-gradient-to-r from-soul-400 via-teal-200 to-brass-300 soul-text-glow">ARCADE</span>
+                </h1>
+
+                <!-- 서브 타이틀 -->
+                <p class="max-w-2xl mx-auto text-base sm:text-lg text-parchment/80 leading-relaxed mb-8 font-normal" data-i18n="hero_desc">
+                    밸브(Valve)의 <strong class="text-brass-300 font-semibold">데드락(Deadlock)</strong> 스크립트와 물리 엔진을 개조하여, 기존의 룰을 완전히 뒤엎는 독창적인 커스텀 유즈맵과 아케이드 모드를 아카이빙하는 공간입니다.
+                </p>
+
+                <!-- CTA 버튼 그룹 -->
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+                    <a href="#modes" class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-7 py-3.5 rounded-xl bg-gradient-to-r from-soul-500 to-teal-400 hover:from-soul-400 hover:to-teal-300 text-noir-950 font-hud font-bold text-lg tracking-wide shadow-[0_0_25px_rgba(78,242,210,0.35)] transition-all transform hover:-translate-y-0.5">
+                        <span class="animate-coin">🪙</span>
+                        <span data-i18n="cta_explore">INSERT COIN • 유즈맵 둘러보기</span>
+                    </a>
+
+                    <a href="https://github.com/ParkSer99/deadbox-arcade" target="_blank" rel="noopener noreferrer" class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl bg-noir-850 hover:bg-noir-800 border border-brass-400/45 hover:border-brass-300 text-parchment font-hud font-bold text-lg tracking-wide transition-all">
+                        <span data-i18n="cta_repo">Repository 바로가기</span>
+                        <svg class="w-4 h-4 text-brass-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                        </svg>
+                    </a>
+                </div>
+
+                <!-- HUD 상태 티커 바 -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl mx-auto bg-noir-900/90 border border-brass-500/30 rounded-xl p-3.5 font-mono text-xs">
+                    <div class="flex items-center justify-center sm:justify-start gap-2 px-2">
+                        <span class="text-brass-400">ARCHIVED MODS:</span>
+                        <span class="text-soul-400 font-bold">03 GAMES</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-2 px-2 border-y sm:border-y-0 sm:border-x border-brass-500/20 py-1.5 sm:py-0">
+                        <span class="text-brass-400">FRAMEWORK:</span>
+                        <span class="text-parchment font-bold">MODLOCK / SCRIPTING</span>
+                    </div>
+                    <div class="flex items-center justify-center sm:justify-end gap-2 px-2">
+                        <span class="text-brass-400">MAP OVERRIDE:</span>
+                        <span class="text-occult-amber font-bold">CURSED APPLE</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 유즈맵 아케이드 쇼케이스 섹션 -->
+        <section id="modes" class="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+            <!-- 섹션 헤더 & 필터 탭 -->
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                <div>
+                    <div class="font-mono text-xs text-soul-400 tracking-widest uppercase mb-1.5">
+                        // ARCADE CABINET SELECTION
+                    </div>
+                    <h2 class="font-display text-3xl sm:text-4xl font-bold text-parchment" data-i18n="section_modes_title">
+                        커스텀 유즈맵 라인업
+                    </h2>
+                    <p class="text-sm sm:text-base text-parchment/70 mt-1.5" data-i18n="section_modes_sub">
+                        고전 명작 아케이드와 한국 유즈맵의 감성을 데드락의 물리 엔진과 영웅 스킬로 재해석했습니다.
+                    </p>
+                </div>
+
+                <!-- 상태 필터 버튼 -->
+                <div class="inline-flex p-1 rounded-xl bg-noir-900 border border-brass-500/30 self-start md:self-auto" role="group">
+                    <button onclick="filterModes('all')" id="filter-all" class="filter-btn px-4 py-2 rounded-lg font-mono text-xs font-bold transition-all bg-soul-500/20 text-soul-400 border border-soul-400/40 cursor-pointer" data-i18n="filter_all">
+                        ALL (3)
+                    </button>
+                    <button onclick="filterModes('playable')" id="filter-playable" class="filter-btn px-4 py-2 rounded-lg font-mono text-xs font-bold text-parchment/60 hover:text-parchment transition-all border border-transparent cursor-pointer" data-i18n="filter_playable">
+                        PLAYABLE (2)
+                    </button>
+                    <button onclick="filterModes('dev')" id="filter-dev" class="filter-btn px-4 py-2 rounded-lg font-mono text-xs font-bold text-parchment/60 hover:text-parchment transition-all border border-transparent cursor-pointer" data-i18n="filter_dev">
+                        IN DEV (1)
+                    </button>
+                </div>
+            </div>
+
+            <!-- 3개 유즈맵 카드 그리드 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-7" id="modesGrid">
+
+                <!-- 1. Super Smash Rems (대난투 오마주) -->
+                <article class="deco-card rounded-2xl overflow-hidden flex flex-col" data-status="playable">
+                    <!-- 커스텀 인게임 HUD 프리뷰 배너 (스크린샷 오마주) -->
+                    <div class="relative h-48 bg-gradient-to-b from-[#1d2738] via-[#131926] to-[#0d111a] p-4 border-b border-brass-500/25 flex flex-col justify-between overflow-hidden">
+                        <!-- 상단 미니 HUD 모형 (스크린샷의 '렘 대난투' 상단 UI 재현) -->
+                        <div class="flex items-center justify-between text-[10px] font-mono text-parchment/60">
+                            <span class="px-2 py-0.5 rounded bg-noir-950/80 border border-soul-400/30 text-soul-400">MODLOCK HUD</span>
+                            <span class="text-brass-300 font-bold" data-i18n="hud_smash_title">렘 대난투</span>
+                            <span>STOCK • 3</span>
+                        </div>
+
+                        <!-- 중앙 % 데미지 대시보드 시뮬레이션 -->
+                        <div class="my-auto bg-noir-950/85 border border-brass-400/35 rounded-xl px-3.5 py-2.5 shadow-lg">
+                            <div class="grid grid-cols-2 gap-3 text-xs font-hud">
+                                <div class="flex items-center justify-between border-r border-brass-500/20 pr-2.5">
+                                    <span class="text-soul-400 font-bold">ALLY</span>
+                                    <span class="text-lg font-extrabold text-parchment">24<span class="text-xs text-brass-300">%</span></span>
+                                </div>
+                                <div class="flex items-center justify-between pl-1">
+                                    <span class="text-occult-red font-bold">ENEMY</span>
+                                    <span class="text-lg font-extrabold text-occult-amber">148<span class="text-xs text-occult-red">%</span></span>
+                                </div>
+                            </div>
+                            <div class="mt-1.5 flex items-center justify-between text-[10px] font-mono text-parchment/60">
+                                <span>KNOCKBACK MULTIPLIER</span>
+                                <span class="text-occult-red font-bold">HIGH DANGER ▲</span>
+                            </div>
+                        </div>
+
+                        <!-- 하단 스킬 바 모형 -->
+                        <div class="flex items-center justify-center gap-2">
+                            <span class="px-2.5 py-0.5 rounded bg-blue-950/90 border border-blue-400/40 text-[10px] font-mono text-blue-200">
+                                [1] 베개 던지기 2.2s
+                            </span>
+                            <span class="px-2.5 py-0.5 rounded bg-noir-950/80 border border-brass-500/30 text-[10px] font-mono text-brass-300">
+                                RING-OUT KO
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 카드 본문 -->
+                    <div class="p-6 flex-grow flex flex-col">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-soul-500/15 border border-soul-400/40 font-mono text-[11px] font-bold text-soul-400">
+                                ● PLAYABLE
+                            </span>
+                            <span class="font-mono text-xs text-brass-400" data-i18n="card1_homage">대난투 오마주</span>
+                        </div>
+
+                        <h3 class="font-display text-2xl font-bold text-parchment mb-1">
+                            Super Smash Rems
+                        </h3>
+                        <p class="font-mono text-xs text-brass-300/80 mb-3">
+                            Knockback Arena Brawler • 2–8 Players
+                        </p>
+
+                        <p class="text-sm text-parchment/80 leading-relaxed mb-5 flex-grow" data-i18n="card1_desc">
+                            체력이 줄어드는 대신 <strong>피해 퍼센트(%)</strong>가 누적되는 대난투 스타일 난투 모드입니다. 퍼센트가 높아질수록 피격 시 날아가는 넉백 거리가 폭발적으로 증가하며, 상대를 맵 밖(Ring-Out)으로 날려버려 스톡을 빼앗으세요!
+                        </p>
+
+                        <!-- 핵심 메커니즘 태그 -->
+                        <div class="flex flex-wrap gap-1.5 mb-5">
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">% Damage HUD</span>
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">Knockback Physics</span>
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">Pillow Toss</span>
+                        </div>
+
+                        <button onclick="openModal('smash')" class="w-full py-2.5 px-4 rounded-xl bg-noir-800 hover:bg-soul-500/20 border border-brass-400/40 hover:border-soul-400 text-parchment hover:text-soul-400 font-hud font-bold text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer">
+                            <span data-i18n="btn_details">규칙 및 메커니즘 상세보기</span>
+                            <span>→</span>
+                        </button>
+                    </div>
+                </article>
+
+                <!-- 2. Bikachu VolleyBall (피카츄 배구 오마주) -->
+                <article class="deco-card rounded-2xl overflow-hidden flex flex-col" data-status="playable">
+                    <!-- 커스텀 인게임 배구 코트 프리뷰 배너 -->
+                    <div class="relative h-48 bg-gradient-to-b from-[#232018] via-[#171922] to-[#0d111a] p-4 border-b border-brass-500/25 flex flex-col justify-between overflow-hidden">
+                        <div class="flex items-center justify-between text-[10px] font-mono text-parchment/60">
+                            <span class="px-2 py-0.5 rounded bg-noir-950/80 border border-brass-400/40 text-brass-300">ARCADE COURT</span>
+                            <span class="text-soul-400 font-bold">SET 1 • 14 : 13</span>
+                            <span>15 PTS WIN</span>
+                        </div>
+
+                        <!-- 미니 배구 코트 애니메이션 모형 -->
+                        <div class="relative h-24 my-auto rounded-xl bg-noir-950/80 border border-brass-500/30 overflow-hidden flex items-end justify-between px-6 pb-2">
+                            <!-- 왼쪽 플레이어 -->
+                            <div class="flex flex-col items-center">
+                                <div class="w-6 h-6 rounded-full bg-soul-400/20 border border-soul-400 flex items-center justify-center text-[10px] font-bold text-soul-400">P1</div>
+                                <div class="w-8 h-1 bg-soul-400/40 rounded-full mt-1"></div>
+                            </div>
+
+                            <!-- 중앙 네트 -->
+                            <div class="h-12 w-1 bg-gradient-to-t from-brass-400 to-parchment rounded-t relative">
+                                <span class="absolute -top-4 -left-3 font-mono text-[9px] text-brass-300">NET</span>
+                            </div>
+
+                            <!-- 오른쪽 플레이어 -->
+                            <div class="flex flex-col items-center">
+                                <div class="w-6 h-6 rounded-full bg-occult-amber/20 border border-occult-amber flex items-center justify-center text-[10px] font-bold text-occult-amber">P2</div>
+                                <div class="w-8 h-1 bg-occult-amber/40 rounded-full mt-1"></div>
+                            </div>
+
+                            <!-- 움직이는 영혼 배구공 -->
+                            <div class="animate-volley absolute top-7 left-12 w-4 h-4 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-200 shadow-[0_0_12px_#facc15] border border-white"></div>
+                        </div>
+
+                        <div class="flex items-center justify-center gap-2">
+                            <span class="px-2.5 py-0.5 rounded bg-amber-950/80 border border-amber-400/40 text-[10px] font-mono text-amber-200">
+                                ⚡ POWER SPIKE
+                            </span>
+                            <span class="px-2.5 py-0.5 rounded bg-noir-950/80 border border-brass-500/30 text-[10px] font-mono text-parchment/75">
+                                SLIDING DIVE
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 카드 본문 -->
+                    <div class="p-6 flex-grow flex flex-col">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-soul-500/15 border border-soul-400/40 font-mono text-[11px] font-bold text-soul-400">
+                                ● PLAYABLE
+                            </span>
+                            <span class="font-mono text-xs text-brass-400" data-i18n="card2_homage">피카츄 배구 오마주</span>
+                        </div>
+
+                        <h3 class="font-display text-2xl font-bold text-parchment mb-1">
+                            Bikachu VolleyBall
+                        </h3>
+                        <p class="font-mono text-xs text-brass-300/80 mb-3">
+                            Custom Ball Physics Sports • 1v1 / 2v2
+                        </p>
+
+                        <p class="text-sm text-parchment/80 leading-relaxed mb-5 flex-grow" data-i18n="card2_desc">
+                            전설의 고전 게임 <strong>피카츄 배구</strong>를 데드락 속에 구현했습니다. 커스텀 볼 궤적 물리 엔진과 중앙 네트 충돌 판정을 적용해, 점프 스파이크와 다이빙 리시브로 상대 코트에 공을 꽂아 넣는 심리전을 즐길 수 있습니다.
+                        </p>
+
+                        <!-- 핵심 메커니즘 태그 -->
+                        <div class="flex flex-wrap gap-1.5 mb-5">
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">Ball Trajectory</span>
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">Spike & Dive</span>
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">15-Pt Rules</span>
+                        </div>
+
+                        <button onclick="openModal('volley')" class="w-full py-2.5 px-4 rounded-xl bg-noir-800 hover:bg-soul-500/20 border border-brass-400/40 hover:border-soul-400 text-parchment hover:text-soul-400 font-hud font-bold text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer">
+                            <span data-i18n="btn_details">규칙 및 메커니즘 상세보기</span>
+                            <span>→</span>
+                        </button>
+                    </div>
+                </article>
+
+                <!-- 3. Rage Marathon (혈압마라톤 오마주 - 개발중) -->
+                <article class="deco-card rounded-2xl overflow-hidden flex flex-col" data-status="dev">
+                    <!-- 커스텀 인게임 혈압마라톤 프리뷰 배너 -->
+                    <div class="relative h-48 bg-gradient-to-b from-[#2b1418] via-[#1a131c] to-[#0d111a] p-4 border-b border-brass-500/25 flex flex-col justify-between overflow-hidden">
+                        <div class="flex items-center justify-between text-[10px] font-mono text-parchment/60">
+                            <span class="px-2 py-0.5 rounded bg-occult-red/20 border border-occult-red/50 text-occult-red font-bold">WIP • DEV BUILD</span>
+                            <span class="text-brass-300 font-bold">STAGE 04 / 10</span>
+                            <span class="text-occult-red">DEATHS: 42</span>
+                        </div>
+
+                        <!-- 혈압 게이지 & 장애물 트랙 모형 -->
+                        <div class="my-auto bg-noir-950/85 border border-occult-red/40 rounded-xl p-3">
+                            <div class="flex items-center justify-between text-[11px] font-mono mb-1.5">
+                                <span class="text-parchment/80">BLOOD PRESSURE</span>
+                                <span class="text-occult-red font-bold animate-rage">198 mmHg ⚠</span>
+                            </div>
+                            <div class="w-full h-2.5 bg-noir-850 rounded-full overflow-hidden border border-white/10">
+                                <div class="h-full w-[86%] bg-gradient-to-r from-amber-500 via-orange-500 to-occult-red rounded-full"></div>
+                            </div>
+                            <div class="mt-2 flex items-center justify-between text-[10px] font-mono text-parchment/55">
+                                <span>START</span>
+                                <span class="text-occult-amber">▲ TRAP ZONE</span>
+                                <span class="text-soul-400">GOAL</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-center gap-2">
+                            <span class="px-2.5 py-0.5 rounded bg-red-950/80 border border-occult-red/40 text-[10px] font-mono text-red-200">
+                                ☠ ONE SLIP = FALL BACK
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 카드 본문 -->
+                    <div class="p-6 flex-grow flex flex-col">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-occult-amber/15 border border-occult-amber/45 font-mono text-[11px] font-bold text-occult-amber">
+                                ⚙ IN DEVELOPMENT
+                            </span>
+                            <span class="font-mono text-xs text-brass-400" data-i18n="card3_homage">혈압마라톤 오마주</span>
+                        </div>
+
+                        <h3 class="font-display text-2xl font-bold text-parchment mb-1">
+                            Rage Marathon
+                        </h3>
+                        <p class="font-mono text-xs text-brass-300/80 mb-3">
+                            Precision Obstacle Course • Solo / Co-op
+                        </p>
+
+                        <p class="text-sm text-parchment/80 leading-relaxed mb-5 flex-grow" data-i18n="card3_desc">
+                            스타크래프트 유즈맵의 전설 <strong>'혈압마라톤'</strong>을 모티브로 개발 중인 극악 난이도 장애물 코스입니다. 한 번의 발헛디딤이나 타이밍 실수가 태초마을행 추락으로 이어지는 긴장감 넘치는 점프 & 무브먼트 레이스!
+                        </p>
+
+                        <!-- 핵심 메커니즘 태그 -->
+                        <div class="flex flex-wrap gap-1.5 mb-5">
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">Precision Jump</span>
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">Troll Traps</span>
+                            <span class="px-2 py-1 rounded bg-noir-950 border border-brass-500/25 font-mono text-[11px] text-parchment/75">Checkpoints</span>
+                        </div>
+
+                        <button onclick="openModal('rage')" class="w-full py-2.5 px-4 rounded-xl bg-noir-800 hover:bg-occult-amber/20 border border-brass-400/40 hover:border-occult-amber text-parchment hover:text-occult-amber font-hud font-bold text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer">
+                            <span data-i18n="btn_dev_notes">개발 노트 및 컨셉 보기</span>
+                            <span>→</span>
+                        </button>
+                    </div>
+                </article>
+
+            </div>
+        </section>
+
+        <!-- 실행 및 참여 가이드 섹션 -->
+        <section id="setup" class="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 border-t border-brass-500/20 bg-noir-900/50">
+            <div class="max-w-5xl mx-auto">
+                <div class="text-center mb-12">
+                    <span class="font-mono text-xs text-brass-400 tracking-widest uppercase">// HOW TO PLAY & INSTALL</span>
+                    <h2 class="font-display text-3xl sm:text-4xl font-bold text-parchment mt-1" data-i18n="setup_title">
+                        커스텀 유즈맵 플레이 방법
+                    </h2>
+                    <p class="text-sm sm:text-base text-parchment/70 mt-2" data-i18n="setup_sub">
+                        Modlock 환경과 GitHub 레포지토리의 스크립트를 통해 친구들과 함께 커스텀 모드를 즐길 수 있습니다.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <!-- Step 1 -->
+                    <div class="p-6 rounded-2xl bg-noir-850/90 border border-brass-500/25">
+                        <div class="w-9 h-9 rounded-lg bg-soul-500/15 border border-soul-400/40 text-soul-400 font-mono font-bold flex items-center justify-center mb-4">
+                            01
+                        </div>
+                        <h3 class="font-hud text-xl font-bold text-parchment mb-2" data-i18n="step1_title">레포지토리 다운로드</h3>
+                        <p class="text-sm text-parchment/75 leading-relaxed" data-i18n="step1_desc">
+                            GitHub에서 <code class="text-soul-400 font-mono">deadbox-arcade</code> 레포지토리를 클론하거나 원하는 유즈맵 스크립트 파일을 내려받습니다.
+                        </p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="p-6 rounded-2xl bg-noir-850/90 border border-brass-500/25">
+                        <div class="w-9 h-9 rounded-lg bg-soul-500/15 border border-soul-400/40 text-soul-400 font-mono font-bold flex items-center justify-center mb-4">
+                            02
+                        </div>
+                        <h3 class="font-hud text-xl font-bold text-parchment mb-2" data-i18n="step2_title">Modlock 세팅 적용</h3>
+                        <p class="text-sm text-parchment/75 leading-relaxed" data-i18n="step2_desc">
+                            데드락 커스텀 로비 및 스크립트 실행을 지원하는 Modlock 환경에 해당 유즈맵 모듈을 로드합니다.
+                        </p>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="p-6 rounded-2xl bg-noir-850/90 border border-brass-500/25">
+                        <div class="w-9 h-9 rounded-lg bg-soul-500/15 border border-soul-400/40 text-soul-400 font-mono font-bold flex items-center justify-center mb-4">
+                            03
+                        </div>
+                        <h3 class="font-hud text-xl font-bold text-parchment mb-2" data-i18n="step3_title">커스텀 로비 생성 & 플레이</h3>
+                        <p class="text-sm text-parchment/75 leading-relaxed" data-i18n="step3_desc">
+                            프라이빗 로비를 열고 친구들을 초대한 뒤, 기존의 데드락과는 전혀 다른 아케이드 룰을 즐기세요!
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 원클릭 복사 터미널 박스 -->
+                <div class="rounded-xl bg-noir-950 border border-brass-400/35 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 overflow-x-auto w-full sm:w-auto">
+                        <span class="font-mono text-xs text-soul-400 select-none">$</span>
+                        <code id="cloneCommand" class="font-mono text-xs sm:text-sm text-parchment whitespace-nowrap">git clone https://github.com/ParkSer99/deadbox-arcade.git</code>
+                    </div>
+                    <button onclick="copyCloneCommand()" id="copyBtn" class="w-full sm:w-auto px-4 py-2 rounded-lg bg-brass-500/20 hover:bg-brass-500/30 border border-brass-400/50 text-brass-300 font-mono text-xs font-bold transition-all shrink-0 cursor-pointer">
+                        COPY COMMAND
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 프로젝트 소개 / 크리에이터 섹션 -->
+        <section id="about" class="py-14 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto text-center">
+            <div class="p-8 rounded-2xl bg-gradient-to-b from-noir-850/80 to-noir-950/90 border border-brass-500/30">
+                <span class="font-mono text-xs text-soul-400 tracking-widest uppercase">ABOUT THE ARCHIVE</span>
+                <h3 class="font-display text-2xl font-bold text-parchment mt-2 mb-3" data-i18n="about_title">
+                    "데드락의 영웅과 물리 엔진으로 무엇이든 만들 수 있다면?"
+                </h3>
+                <p class="text-sm sm:text-base text-parchment/75 leading-relaxed mb-6" data-i18n="about_desc">
+                    <strong>DEADBOX ARCADE</strong>는 단순한 밸런스 패치를 넘어, 커스텀 UI·물리 반발력·투사체 궤적·승리 조건을 스크립트로 재설계하여 데드락 안에 또 다른 미니게임을 구축하는 실험적 유즈맵 저장소입니다. 새로운 아이디어와 피드백은 언제든 GitHub Issues를 통해 환영합니다.
+                </p>
+                <a href="https://github.com/ParkSer99/deadbox-arcade" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 text-soul-400 hover:text-soul-300 font-mono text-sm font-semibold underline underline-offset-4">
+                    <span>github.com/ParkSer99/deadbox-arcade</span>
+                    <span>↗</span>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <!-- 푸터 -->
+    <footer class="border-t border-brass-500/25 bg-noir-950 py-10 px-4 sm:px-6 lg:px-8 text-center">
+        <div class="max-w-7xl mx-auto flex flex-col items-center gap-3">
+            <p class="font-mono text-xs text-soul-400 tracking-widest animate-coin">
+                GAME OVER? INSERT COIN TO CONTINUE
+            </p>
+            <p class="text-sm text-parchment/80">
+                Crafted by <a href="https://github.com/ParkSer99" target="_blank" rel="noopener noreferrer" class="text-brass-300 hover:text-soul-400 font-semibold transition-colors">ParkSer99</a> • Hosted on GitHub Pages
+            </p>
+            <p class="text-xs text-parchment/45 max-w-xl">
+                Deadlock and the Deadlock logo are trademarks of Valve Corporation. This is an unofficial fan-made custom game mode archive powered by Modlock.
+            </p>
+        </div>
+    </footer>
+
+    <!-- 상세 규칙 & 메커니즘 모달 -->
+    <div id="detailModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onclick="closeModalOnBackdrop(event)">
+        <div class="relative w-full max-w-2xl rounded-2xl bg-noir-900 border border-brass-400/50 shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden">
+            <!-- 모달 헤더 -->
+            <div class="px-6 py-4 bg-noir-950 border-b border-brass-500/25 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <span id="modalBadge" class="px-2 py-0.5 rounded font-mono text-[11px] font-bold"></span>
+                    <span id="modalHomage" class="font-mono text-xs text-brass-400"></span>
+                </div>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-lg bg-noir-850 hover:bg-noir-800 text-parchment/70 hover:text-white flex items-center justify-center font-mono text-lg cursor-pointer">
+                    ✕
+                </button>
+            </div>
+
+            <!-- 모달 본문 -->
+            <div class="p-6 sm:p-7 max-h-[75vh] overflow-y-auto">
+                <h3 id="modalTitle" class="font-display text-2xl sm:text-3xl font-bold text-parchment mb-2"></h3>
+                <p id="modalSubtitle" class="font-mono text-xs text-soul-400 mb-5"></p>
+                
+                <p id="modalDesc" class="text-sm sm:text-base text-parchment/85 leading-relaxed mb-6"></p>
+
+                <div class="bg-noir-950/90 border border-brass-500/25 rounded-xl p-5 mb-6">
+                    <h4 class="font-hud text-base font-bold text-brass-300 uppercase tracking-wider mb-3" id="modalMechanicsHeader">
+                        핵심 게임 메커니즘 & 커스텀 스크립트 요소
+                    </h4>
+                    <ul id="modalMechanicsList" class="space-y-2.5 text-sm text-parchment/80">
+                        <!-- JS로 동적 삽입 -->
+                    </ul>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-center justify-end gap-3">
+                    <button onclick="closeModal()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-noir-850 hover:bg-noir-800 border border-brass-500/30 text-parchment text-sm font-medium cursor-pointer" id="modalCloseBtn">
+                        닫기
+                    </button>
+                    <a href="https://github.com/ParkSer99/deadbox-arcade" target="_blank" rel="noopener noreferrer" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-soul-500 hover:bg-soul-400 text-noir-950 font-hud font-bold text-sm tracking-wide text-center transition-colors" id="modalRepoBtn">
+                        GitHub에서 코드 확인하기 ↗
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 토스트 알림 (alert 대체) -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 translate-y-20 opacity-0 transition-all duration-300 px-4 py-3 rounded-xl bg-noir-900 border border-soul-400 text-soul-400 font-mono text-xs shadow-lg flex items-center gap-2">
+        <span>✓</span>
+        <span id="toastMsg">클립보드에 복사되었습니다!</span>
+    </div>
+
+    <script>
+        // 다국어(KO/EN) 데이터 사전
+        let currentLang = 'ko';
+
+        const i18n = {
+            ko: {
+                nav_modes: "유즈맵 목록",
+                nav_setup: "실행 가이드",
+                nav_about: "프로젝트 소개",
+                hero_desc: "밸브(Valve)의 <strong class='text-brass-300 font-semibold'>데드락(Deadlock)</strong> 스크립트와 물리 엔진을 개조하여, 기존의 룰을 완전히 뒤엎는 독창적인 커스텀 유즈맵과 아케이드 모드를 아카이빙하는 공간입니다.",
+                cta_explore: "INSERT COIN • 유즈맵 둘러보기",
+                cta_repo: "Repository 바로가기",
+                section_modes_title: "커스텀 유즈맵 라인업",
+                section_modes_sub: "고전 명작 아케이드와 한국 유즈맵의 감성을 데드락의 물리 엔진과 영웅 스킬로 재해석했습니다.",
+                filter_all: "ALL (3)",
+                filter_playable: "PLAYABLE (2)",
+                filter_dev: "IN DEV (1)",
+                hud_smash_title: "렘 대난투",
+                card1_homage: "대난투 오마주",
+                card1_desc: "체력이 줄어드는 대신 <strong>피해 퍼센트(%)</strong>가 누적되는 대난투 스타일 난투 모드입니다. 퍼센트가 높아질수록 피격 시 날아가는 넉백 거리가 폭발적으로 증가하며, 상대를 맵 밖(Ring-Out)으로 날려버려 스톡을 빼앗으세요!",
+                card2_homage: "피카츄 배구 오마주",
+                card2_desc: "전설의 고전 게임 <strong>피카츄 배구</strong>를 데드락 속에 구현했습니다. 커스텀 볼 궤적 물리 엔진과 중앙 네트 충돌 판정을 적용해, 점프 스파이크와 다이빙 리시브로 상대 코트에 공을 꽂아 넣는 심리전을 즐길 수 있습니다.",
+                card3_homage: "혈압마라톤 오마주",
+                card3_desc: "스타크래프트 유즈맵의 전설 <strong>'혈압마라톤'</strong>을 모티브로 개발 중인 극악 난이도 장애물 코스입니다. 한 번의 발헛디딤이나 타이밍 실수가 태초마을행 추락으로 이어지는 긴장감 넘치는 점프 & 무브먼트 레이스!",
+                btn_details: "규칙 및 메커니즘 상세보기",
+                btn_dev_notes: "개발 노트 및 컨셉 보기",
+                setup_title: "커스텀 유즈맵 플레이 방법",
+                setup_sub: "Modlock 환경과 GitHub 레포지토리의 스크립트를 통해 친구들과 함께 커스텀 모드를 즐길 수 있습니다.",
+                step1_title: "레포지토리 다운로드",
+                step1_desc: "GitHub에서 <code class='text-soul-400 font-mono'>deadbox-arcade</code> 레포지토리를 클론하거나 원하는 유즈맵 스크립트 파일을 내려받습니다.",
+                step2_title: "Modlock 세팅 적용",
+                step2_desc: "데드락 커스텀 로비 및 스크립트 실행을 지원하는 Modlock 환경에 해당 유즈맵 모듈을 로드합니다.",
+                step3_title: "커스텀 로비 생성 & 플레이",
+                step3_desc: "프라이빗 로비를 열고 친구들을 초대한 뒤, 기존의 데드락과는 전혀 다른 아케이드 룰을 즐기세요!",
+                about_title: "\"데드락의 영웅과 물리 엔진으로 무엇이든 만들 수 있다면?\"",
+                about_desc: "<strong>DEADBOX ARCADE</strong>는 단순한 밸런스 패치를 넘어, 커스텀 UI·물리 반발력·투사체 궤적·승리 조건을 스크립트로 재설계하여 데드락 안에 또 다른 미니게임을 구축하는 실험적 유즈맵 저장소입니다. 새로운 아이디어와 피드백은 언제든 GitHub Issues를 통해 환영합니다.",
+                toast_copied: "클립보드에 복사되었습니다!"
+            },
+            en: {
+                nav_modes: "Game Modes",
+                nav_setup: "How to Play",
+                nav_about: "About",
+                hero_desc: "An experimental custom game-mode vault for Valve's <strong class='text-brass-300 font-semibold'>Deadlock</strong>—overriding standard rules with custom scripting, modified physics, and retro arcade mechanics.",
+                cta_explore: "INSERT COIN • EXPLORE MODES",
+                cta_repo: "View Repository",
+                section_modes_title: "Custom Arcade Lineup",
+                section_modes_sub: "Classic arcade legends and iconic custom maps reimagined with Deadlock's movement and hero abilities.",
+                filter_all: "ALL (3)",
+                filter_playable: "PLAYABLE (2)",
+                filter_dev: "IN DEV (1)",
+                hud_smash_title: "REM SMASH",
+                card1_homage: "Super Smash Bros. Homage",
+                card1_desc: "A knockback-based arena brawler inspired by Super Smash Bros. Instead of losing HP, players accumulate <strong>Damage Percentage (%)</strong>—the higher your %, the farther you fly when hit. Launch rivals out of bounds to take their stocks!",
+                card2_homage: "Pikachu Volleyball Homage",
+                card2_desc: "The classic retro arcade hit <strong>Pikachu Volleyball</strong> rebuilt inside Deadlock. Features custom ball trajectory physics, center-net collision boundaries, jump spikes, and diving saves in intense 15-point matches.",
+                card3_homage: "Blood Pressure Marathon Homage",
+                card3_desc: "Inspired by the infamous Korean StarCraft custom map <strong>'Blood Pressure Marathon'</strong>. A punishing precision platforming & movement gauntlet where a single misstep sends you tumbling all the way back down.",
+                btn_details: "View Rules & Mechanics",
+                btn_dev_notes: "View Dev Notes & Concept",
+                setup_title: "Quick Setup & How to Play",
+                setup_sub: "Run these custom modes locally or with friends using Modlock and the deadbox-arcade scripts.",
+                step1_title: "Clone Repository",
+                step1_desc: "Clone <code class='text-soul-400 font-mono'>deadbox-arcade</code> from GitHub or download the specific custom mode scripts.",
+                step2_title: "Load via Modlock",
+                step2_desc: "Place the custom mode module into your Modlock environment configured for Deadlock custom scripting.",
+                step3_title: "Host Lobby & Play",
+                step3_desc: "Create a private custom match, invite your friends, and experience Cursed Apple with completely rewritten rules!",
+                about_title: "\"What if Deadlock's physics & heroes became a sandbox for arcade games?\"",
+                about_desc: "<strong>DEADBOX ARCADE</strong> goes beyond simple stat tweaks—rebuilding custom HUDs, knockback vectors, ball physics, and win conditions to create standalone mini-games inside Deadlock. Feedback and ideas are always welcome via GitHub Issues.",
+                toast_copied: "Copied to clipboard!"
+            }
+        };
+
+        // 상세 모달 데이터
+        const modalData = {
+            smash: {
+                badge: "● PLAYABLE",
+                badgeClass: "bg-soul-500/20 text-soul-400 border border-soul-400/40",
+                homage: { ko: "대난투 스매시브라더스 오마주", en: "Super Smash Bros. Homage" },
+                title: "Super Smash Rems",
+                subtitle: "KNOCKBACK ARENA BRAWLER • CUSTOM HUD & LAUNCH PHYSICS",
+                desc: {
+                    ko: "데드락의 기본 사격/스킬 데미지 시스템을 '축적 퍼센트(%) 및 넉백 배율 시스템'으로 완전히 대체한 모드입니다. 상단 커스텀 HUD를 통해 아군과 적군의 현재 위험도(%)를 실시간으로 확인할 수 있으며, 베개 던지기와 근접 타격으로 상대를 장외(Ring-Out) 시키면 승리합니다.",
+                    en: "Replaces Deadlock's standard health elimination with a Smash-style damage percentage (%) and knockback scaling engine. Track every player's danger % on the custom top-bar HUD and launch opponents past the ring-out boundaries."
+                },
+                mechanics: {
+                    ko: [
+                        "<strong>퍼센트(%) 누적 시스템:</strong> 0%에서 시작해 피격 시 %가 상승하며, 수치가 높을수록 넉백 속도와 비거리가 기하급수적으로 증가합니다.",
+                        "<strong>커스텀 상단 스코어 HUD:</strong> 스크린샷처럼 상단 중앙 패널에 아군/상대의 실시간 데미지 %와 남은 스톡(목숨)을 직관적으로 표시합니다.",
+                        "<strong>특수 투사체 & 날리기 액션:</strong> '베개 던지기' 등 전용 스킬 쿨타임과 히트스톱/넉백 벡터를 조정하여 손맛 있는 공방전을 구현했습니다.",
+                        "<strong>장외(Ring-Out) 판정 구역:</strong> 맵 외곽 및 하단 추락 경계선에 닿으면 즉시 스톡이 차감되고 리스폰됩니다."
+                    ],
+                    en: [
+                        "<strong>Damage % Accumulation:</strong> Starts at 0% and climbs on hit—higher percentages exponentially amplify knockback velocity.",
+                        "<strong>Custom Top-Bar HUD:</strong> Displays real-time ally/enemy damage percentages and remaining stocks at the top center of the screen.",
+                        "<strong>Custom Launch Abilities:</strong> Tuned cooldowns (such as Pillow Toss) and directional knockback vectors for crisp aerial combos.",
+                        "<strong>Ring-Out Elimination Zones:</strong> Crossing outer or lower blast zones deducts a stock and triggers an arena respawn."
+                    ]
+                }
+            },
+            volley: {
+                badge: "● PLAYABLE",
+                badgeClass: "bg-soul-500/20 text-soul-400 border border-soul-400/40",
+                homage: { ko: "피카츄 배구 오마주", en: "Pikachu Volleyball Homage" },
+                title: "Bikachu VolleyBall",
+                subtitle: "CUSTOM BALL PHYSICS • NET COLLISION & SPIKE MECHANICS",
+                desc: {
+                    ko: "추억의 고전 아케이드 게임 '피카츄 배구'의 물리 감각과 룰을 데드락 3D 공간에 이식했습니다. 중력, 탄성 반발력, 스파이크 각도가 계산된 전용 배구공 엔티티를 중심으로 치열한 네트 앞 공방전을 펼칠 수 있습니다.",
+                    en: "Brings the nostalgic mechanics of Pikachu Volleyball into Deadlock's 3D engine. Features a custom-scripted volleyball entity with gravity, bounce elasticity, net collision walls, and directional spikes."
+                },
+                mechanics: {
+                    ko: [
+                        "<strong>커스텀 볼 궤적 물리 엔진:</strong> 플레이어의 위치, 점프 상태, 타격 방향에 따라 공의 속도와 회전/각도가 실시간으로 계산됩니다.",
+                        "<strong>중앙 네트 및 코트 경계:</strong> 양 진영을 가르는 중앙 네트 충돌 판정과 코트 바닥 바운드 판정으로 정확한 득점 룰을 적용했습니다.",
+                        "<strong>점프 스파이크 & 슬라이딩 리시브:</strong> 데드락의 대시/점프 무브먼트를 활용해 공을 강하게 내리꽂거나 바닥 직전의 공을 살려낼 수 있습니다.",
+                        "<strong>15점 매치 포인트 룰:</strong> 먼저 15점을 획득하는 팀이 세트를 가져가는 클래식 아케이드 스코어보드 시스템을 지원합니다."
+                    ],
+                    en: [
+                        "<strong>Custom Ball Trajectory Engine:</strong> Calculates ball velocity, bounce arc, and impact angles based on player momentum and hit direction.",
+                        "<strong>Center Net & Court Boundaries:</strong> Enforces strict net collision barriers and floor-touch point scoring for each side.",
+                        "<strong>Jump Spikes & Diving Saves:</strong> Combine Deadlock's dash and jump mechanics to slam fast spikes or rescue low balls.",
+                        "<strong>Classic 15-Point Match Rules:</strong> Full scoreboard tracking up to 15 points per set."
+                    ]
+                }
+            },
+            rage: {
+                badge: "⚙ IN DEVELOPMENT",
+                badgeClass: "bg-occult-amber/20 text-occult-amber border border-occult-amber/45",
+                homage: { ko: "스타크래프트 '혈압마라톤' 오마주", en: "StarCraft 'Blood Pressure Marathon' Homage" },
+                title: "Rage Marathon",
+                subtitle: "PRECISION OBSTACLE GAUNTLET • TRAP TRIGGERS & CHECKPOINTS",
+                desc: {
+                    ko: "한국 게이머들에게 악명 높은 스타크래프트 유즈맵 '혈압마라톤'을 데드락 버전으로 제작 중인 프로젝트입니다. 데드락 특유의 더블 점프, 대시, 월 점프, 스킬 타이밍을 극한까지 요구하는 정밀 플랫폼 코스로 설계되고 있습니다.",
+                    en: "A Deadlock adaptation of the legendary Korean StarCraft rage-inducing custom map 'Blood Pressure Marathon'. Designed to push Deadlock's double-jumps, air-dashes, and timing to the absolute limit."
+                },
+                mechanics: {
+                    ko: [
+                        "<strong>정밀 파쿠르 & 무브먼트 구간:</strong> 픽셀 단위의 착지 발판, 움직이는 플랫폼, 타이밍 함정이 연속으로 배치된 고난도 코스입니다.",
+                        "<strong>자비 없는 추락 페널티:</strong> 한 번의 조작 실수로 발판을 벗어나면 아래층이나 이전 체크포인트까지 그대로 추락합니다.",
+                        "<strong>함정 트리거 & 페이크 발판:</strong> 밟으면 사라지거나 넉백 트랩이 발동하는 '혈압 유발' 기믹들이 곳곳에 숨어 있습니다.",
+                        "<strong>개발 진행 상황:</strong> 현재 핵심 스테이지 기믹과 체크포인트 스크립트를 구현 중이며, 곧 플레이어블 빌드가 공개될 예정입니다."
+                    ],
+                    en: [
+                        "<strong>Precision Parkour Segments:</strong> Tight landing platforms, moving obstacles, and strict timing windows.",
+                        "<strong>Unforgiving Fall Penalties:</strong> One mistimed dash or jump sends you plummeting down to earlier sections.",
+                        "<strong>Troll Traps & Fake Platforms:</strong> Hidden knockback triggers and vanishing floors designed to test your patience.",
+                        "<strong>Development Status:</strong> Core stage triggers and checkpoint scripts are actively being built for the upcoming playable release."
+                    ]
+                }
+            }
+        };
+
+        // 언어 전환 함수
+        function toggleLanguage() {
+            currentLang = currentLang === 'ko' ? 'en' : 'ko';
+            document.documentElement.lang = currentLang;
+
+            // 일반 텍스트 업데이트
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (i18n[currentLang][key]) {
+                    el.innerHTML = i18n[currentLang][key];
+                }
+            });
+
+            // 모달 버튼 텍스트 업데이트
+            document.getElementById('modalMechanicsHeader').textContent = currentLang === 'ko'
+                ? '핵심 게임 메커니즘 & 커스텀 스크립트 요소'
+                : 'Core Mechanics & Custom Scripting Features';
+            document.getElementById('modalCloseBtn').textContent = currentLang === 'ko' ? '닫기' : 'Close';
+            document.getElementById('modalRepoBtn').textContent = currentLang === 'ko'
+                ? 'GitHub에서 코드 확인하기 ↗'
+                : 'Inspect Code on GitHub ↗';
+
+            // 토글 버튼 시각 피드백
+            const badge = document.getElementById('langBadge');
+            badge.className = currentLang === 'ko'
+                ? 'w-2 h-2 rounded-full bg-soul-400'
+                : 'w-2 h-2 rounded-full bg-brass-300';
+        }
+
+        // 카드 필터링 함수
+        function filterModes(status) {
+            const cards = document.querySelectorAll('#modesGrid article');
+            const buttons = document.querySelectorAll('.filter-btn');
+
+            buttons.forEach(btn => {
+                btn.className = 'filter-btn px-4 py-2 rounded-lg font-mono text-xs font-bold text-parchment/60 hover:text-parchment transition-all border border-transparent cursor-pointer';
+            });
+
+            const activeBtn = document.getElementById(`filter-${status}`);
+            activeBtn.className = 'filter-btn px-4 py-2 rounded-lg font-mono text-xs font-bold transition-all bg-soul-500/20 text-soul-400 border border-soul-400/40 cursor-pointer';
+
+            cards.forEach(card => {
+                if (status === 'all' || card.getAttribute('data-status') === status) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        // 상세 모달 열기
+        function openModal(modeKey) {
+            const data = modalData[modeKey];
+            if (!data) return;
+
+            const badgeEl = document.getElementById('modalBadge');
+            badgeEl.textContent = data.badge;
+            badgeEl.className = `px-2.5 py-0.5 rounded font-mono text-[11px] font-bold ${data.badgeClass}`;
+
+            document.getElementById('modalHomage').textContent = data.homage[currentLang];
+            document.getElementById('modalTitle').textContent = data.title;
+            document.getElementById('modalSubtitle').textContent = data.subtitle;
+            document.getElementById('modalDesc').textContent = data.desc[currentLang];
+
+            const listEl = document.getElementById('modalMechanicsList');
+            listEl.innerHTML = data.mechanics[currentLang]
+                .map(item => `<li class="flex items-start gap-2.5"><span class="text-soul-400 mt-0.5">◈</span><span>${item}</span></li>`)
+                .join('');
+
+            const modal = document.getElementById('detailModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+
+        // 모달 닫기
+        function closeModal() {
+            const modal = document.getElementById('detailModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = '';
+        }
+
+        function closeModalOnBackdrop(e) {
+            if (e.target.id === 'detailModal') {
+                closeModal();
+            }
+        }
+
+        // ESC 키로 모달 닫기
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // 클립보드 복사 함수 (execCommand 활용)
+        function copyCloneCommand() {
+            const text = document.getElementById('cloneCommand').textContent;
+            const tempInput = document.createElement('textarea');
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            showToast(i18n[currentLang].toast_copied);
+        }
+
+        // 토스트 메시지 표시
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
